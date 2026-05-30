@@ -21,14 +21,11 @@ app.add_middleware(
 from dotenv import load_dotenv
 load_dotenv()
 
-# ── Config (set these as env vars before running) ───────────────────────────
-SMTP_HOST     = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_HOST     = os.getenv("SMTP_HOST")
 SMTP_PORT     = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER     = os.getenv("SMTP_USER", "your_gmail@gmail.com")   # sender account
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "your_app_password")  # Gmail App Password
-OWNER_EMAIL   = os.getenv("OWNER_EMAIL", "leloemmanuel540@email.com")  # where to receive
-
-
+SMTP_USER     = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+OWNER_EMAIL   = os.getenv("OWNER_EMAIL")
 # ── Request schema ───────────────────────────────────────────────────────────
 class ContactForm(BaseModel):
     name: str
