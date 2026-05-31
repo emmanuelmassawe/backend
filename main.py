@@ -76,7 +76,8 @@ async def send_contact(form: ContactForm):
             },
             json=payload,
         )
-
+    print("RESEND STATUS:", response.status_code)
+    print("RESEND RESPONSE:", response.text)
     if response.status_code != 200:
         raise HTTPException(
             status_code=500,
