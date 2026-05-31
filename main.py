@@ -7,6 +7,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+
+if not RESEND_API_KEY:
+    raise RuntimeError("RESEND_API_KEY not found")
 
 app = FastAPI(title="Emmanuel Lelo — Contact API", version="1.0.0")
 
