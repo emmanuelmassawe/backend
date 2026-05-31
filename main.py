@@ -1,59 +1,44 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import httpx
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Emmanuel Lelo — Contact API", version="1.0.0")
 
-# ── CORS: allow your portfolio's origin ──────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # tighten to your domain in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-from dotenv import load_dotenv
-load_dotenv()
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+OWNER_EMAIL    = os.getenv("OWNER_EMAIL", "leloemmanuel540@gmail.com")
 
-SMTP_HOST     = os.getenv("SMTP_HOST")
-SMTP_PORT     = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER     = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-OWNER_EMAIL   = os.getenv("OWNER_EMAIL")
-# ── Request schema ───────────────────────────────────────────────────────────
 class ContactForm(BaseModel):
     name: str
     email: EmailStr
     subject: str
     message: str
 
-
-# ── In-memory log (replace with a DB if you want persistence) ───────────────
 submissions: list[dict] = []
 
-
-# ── Routes ───────────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
     return {"status": "Contact API is running 🚀"}
 
+@app.get("/ping")
+def ping():
+    return {"status": "alive"}
 
 @app.post("/contact", status_code=200)
-def send_contact(form: ContactForm):
-    """Receive a contact form submission and e-mail it to the portfolio owner."""
-
-    # ── Build e-mail ─────────────────────────────────────────────────────────
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"[Portfolio Contact] {form.subject}"
-    msg["From"]    = SMTP_USER
-    msg["To"]      = OWNER_EMAIL
-    msg["Reply-To"] = form.email
+async def send_contact(form: ContactForm):
 
     html_body = f"""
     <html><body style="font-family:sans-serif;color:#1e293b;max-width:600px;margin:auto">
@@ -69,28 +54,31 @@ def send_contact(form: ContactForm):
       </div>
     </body></html>
     """
-    text_body = (
-        f"From: {form.name} <{form.email}>\n"
-        f"Subject: {form.subject}\n\n{form.message}"
-    )
 
-    msg.attach(MIMEText(text_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
+    payload = {
+        "from": "Portfolio Contact <onboarding@resend.dev>",
+        "to": [OWNER_EMAIL],
+        "reply_to": form.email,
+        "subject": f"[Portfolio] {form.subject}",
+        "html": html_body,
+    }
 
-    # ── Send via SMTP ─────────────────────────────────────────────────────────
-    try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_USER, OWNER_EMAIL, msg.as_string())
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"E-mail delivery failed: {str(exc)}"
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
         )
 
-    # ── Log submission ────────────────────────────────────────────────────────
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Email failed: {response.text}"
+        )
+
     submissions.append({
         "name":      form.name,
         "email":     form.email,
@@ -101,8 +89,6 @@ def send_contact(form: ContactForm):
 
     return {"success": True, "message": "Your message was sent successfully!"}
 
-
 @app.get("/submissions")
 def list_submissions():
-    """Returns all in-memory submissions (dev/debug use only)."""
     return {"count": len(submissions), "data": submissions}
